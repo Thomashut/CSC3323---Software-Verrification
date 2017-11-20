@@ -33,13 +33,13 @@ datatype
   player = P1 | P2
 
 record cord =
-  x :: VDMNat1
-  y :: VDMNat1
+  xcord :: VDMNat1
+  ycord :: VDMNat1
 
 definition
   inv-cord :: cord \<Rightarrow> \<bool>
 where
-  inv-cord c \<equiv> (c x) \<le> GRID_WIDTH \<and> (c y) \<le> GRID_HEIGHT
+  "inv-cord c \<equiv> (xcord c) \<le> GRID_WIDTH \<and> (ycord c) \<le> GRID_HEIGHT" 
 
 
 record move =
@@ -49,7 +49,7 @@ record move =
 definition
   inv-move :: move \<Rightarrow> \<bool>
 where
-  inv-move m \<equiv> (testValidMove (m c1) (m c2)) \<and> (m (c1 x)) \<le> (m (c2 x)) \<and> (m (c1 y) \<le> (m (c2 y)) 
+ "inv-move m \<equiv> (testValidMove (m c1) (m c2)) \<and> (m (c1 x)) \<le> (m (c2 x)) \<and> (m (c1 y) \<le> (m (c2 y))" 
 
 type_synonym 
   bonusTurn = \<bool>
@@ -59,8 +59,6 @@ type_synonym
 
 type_synonym
   play = "move VDMSet"
-
-  (*My Isabelle isn't very good yet, please take pity. Hopefully the model is a lot better than this. *)
 
 (*==============================================================*)
 section{*VDMfunctions*}
@@ -86,12 +84,12 @@ where
 definition
   outOfBounds cord \<Rightarrow> \<bool>
 where
-  outOfBounds c \<equiv> (c x) = (GRID_WIDTH \<or> (c y) = GRID_HEIGHT) \<and> (inv-cord c)
+  "outOfBounds c \<equiv> (xcord c) = (GRID_WIDTH \<or> (ycord c) = GRID_HEIGHT) \<and> (inv-cord c)"
 
 definition
   squaresLeft cord VDMSet \<Rightarrow> nat
 where
-  squaresLeft c \<equiv> ((GRID_WIDTH - 1) * (GRID_HEIGHT - 1)) - (*sizeof*) c
+ " squaresLeft c \<equiv> ((GRID_WIDTH - 1) * (GRID_HEIGHT - 1)) - (*sizeof*) c"
 
 
 (*==============================================================*)
