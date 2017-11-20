@@ -1,0 +1,52 @@
+module dotsandboxes
+exports all
+definitions 
+
+state DotsandBoxes of
+-- TODO Define state here
+	grid	 : map move to player
+	p1turn : bool -- Flag to check if player1 should play
+	
+	
+	init dotsandboxes == dotsandboxes = mk_DotsandBoxes({|->},true)
+end 
+
+types 
+-- TODO Define types here
+	player = <p1> | <p2>;
+	
+	cord = nat1
+	inv c == c < (GRID_SIZE * GRID_SIZE);
+	
+	-- A move itself is a record of two different cords
+	move :: cord1 : cord
+					cord2 : cord
+	inv m == testHorizontal(m.cord1,m.cord2) or testVertical(m.cord1,m.cord2);
+	
+values 
+	GRID_SIZE:nat1 = 4; -- Grid must always be a square so only one number is required
+	
+functions
+	
+	-- Utility function to see if a given set of cords create a valid vertical move	 
+	testVertical: nat1 * nat1 -> bool
+	testVertical(num1, num2) ==
+		((abs( (num1 mod GRID_SIZE) - (num2 mod GRID_SIZE))) <= 1) and -- Check to ensure points are within one row of another
+		((abs(num1 - num2)) = GRID_SIZE) -- Check to ensure points are adjistant to one another
+	pre num1 <= (GRID_SIZE * GRID_SIZE) and num2 <= (GRID_SIZE * GRID_SIZE);
+		
+	-- Utility function to see if a given set of cords create a valid horizontal move	
+	testHorizontal: nat1 * nat1 -> bool
+	testHorizontal(num1,num2) ==
+		((abs(((num1-1) div GRID_SIZE) - ((num2-1) div GRID_SIZE))) = 0) and -- Check to ensure on the same row (n-1 is present as counting starts at zero with div)
+		((abs(num1 - num2)) = 1) -- Check to ensure points are next to one another
+	pre num1 <= (GRID_SIZE * GRID_SIZE) and num2 <= (GRID_SIZE * GRID_SIZE);
+		
+	-- Basic Utility function used to check if two moves are equal of one another.	
+	isMoveSame: move * move -> bool
+	isMoveSame(move1, move2) ==
+		 move1.cord1 = move2.cord1 and move1.cord2 = move2.cord2
+		
+operations 
+-- TODO Define operations here
+end dotsandboxes

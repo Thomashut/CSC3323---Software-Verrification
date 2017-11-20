@@ -1,0 +1,294 @@
+/*
+	Author: Thomas Hutchinson
+	FileName: DotsandBoxesV2.vdmsl
+	Purpose: To Simulate an accurate game of dots and boxes with no cheating
+	Description:
+		The game has been modeled into a grid of coordinates ranging from (1,1) to (GRID_WIDTH,GRID_HEIGHT).
+		Each coordinate refers to a single dot within the game. Users may make moves between dots which are expressed
+		as a record containing two cordinates. The players then take it in turns to draw lines between dots until a box
+		has been created. The player to draw the box creating move then captures that box and add it's to their score.
+		Boxes are modeled by their "anchor points". This refers to the bottom leftmost dot of a square. Anchor points on THE
+		grid are expressed via a single cordinate and they fill the grid from (1,1) TO (GRID_WIDTH - 1, GRID_HEIGHT - 1). The
+		score is kept by the captured anchors map which maps the player to their captured anchor cordinates. The game is over when
+		there's no more boxes left to be created
+*/
+
+module dotsandboxesV2
+imports from IO all
+
+exports all
+definitions 
+
+state dotsandboxesV2 of
+	play : set of move
+	turn : player -- Dictates which player should play the next turn
+	bonusTurn : bool -- Flag used to determine if a play should have a bonus turn
+	
+	-- An anchor is the bottom left handle dot of a square. A player can capture an anchor by
+	-- creating a square with that anchor which is then assigned to them.
+	-- This map is also used to record the player's score by counting how many anchors are held by them
+	capturedAnchors : map player to cord
+	init dots == dots = mk_dotsandboxesV2({},<p1>,false,{|->})
+	
+end 
+
+types 
+	player = <p1> | <p2>;
+	
+	cord :: x : nat1
+					y : nat1
+	inv c == c.x <= GRID_WIDTH and c.y <= GRID_HEIGHT;
+	
+	move :: c1 : cord
+					c2 : cord
+	inv m == testValidMove(m.c1,m.c2)
+		and (m.c1.x <= m.c2.x or m.c1.y <= m.c2.y); -- Test case to ensure a move is normalised (up or right)
+				
+values 
+	GRID_WIDTH  : nat1 = 4;
+	GRID_HEIGHT : nat1 = 4;
+	
+	
+functions
+
+-- Helper function that combines the functionality of both testHoriziontal Move and tesVertical
+	testValidMove: cord * cord -> bool
+	testValidMove(c1,c2) ==
+		testHorizontalMove(c1,c2) or
+		testVerticalMove(c1,c2);
+	
+
+	-- Tests to see if a horizontal move is valid 
+	testHorizontalMove: cord * cord -> bool
+	testHorizontalMove(c1,c2) ==
+		abs(c1.x - c2.x) = 1 and c1.y = c2.y;		
+		
+	-- Tests to see if a Vertical move is valid	
+	testVerticalMove: cord * cord -> bool
+	testVerticalMove(c1,c2) ==
+		c1.x = c2.x and abs(c1.y - c2.y) = 1;
+			
+	-- Helper function that takes a user inputted move and converts it into the standard move format
+	-- A move should always move up or right, it should never move down or left
+	-- This halves the number of possible moves while still retaining the same functionality of the game
+	-- As a left move is technically the same as a move to the right and the same for up and down moves
+	normaliseMove: move -> move
+	normaliseMove(m) ==
+		if( (m.c1.x > m.c2.x) or (m.c1.y > m.c2.y)) then
+			mk_move(m.c2,m.c1)
+		else
+			m;
+			
+-- Given a move and a set of already made moves this function will detect if a box has been made
+	testForBoxCompletion: move * set of move -> bool
+	testForBoxCompletion(m,play) ==
+		validBoxTest(verifyAnchor(m.c1),play);
+			
+-- Neighbour test functions are helpers which will check to see if a given anchor has a neighbour and if so it will test
+-- to see if it has been completed. These functions are used in the process of testing for dobule boxes. Also tests to ensure
+-- the anchor hasn't already been captured			
+	upNeighbourTest: cord * set of move * set of cord -> bool
+	upNeighbourTest(c,play,capturedAnchors) ==
+		if (c.y + 1) > (GRID_HEIGHT - 1) and anchorNotCaptured(mk_cord(c.x,c.y + 1),capturedAnchors) then
+			false
+		else
+			testForBoxCompletion
+			(
+				mk_move
+				(
+					mk_cord(c.x,c.y + 1),
+					mk_cord(1,1)
+				),play
+			);
+			
+	rightNeighbourTest: cord * set of move * set of cord -> bool
+	rightNeighbourTest(c,play,capturedAnchors) ==
+		if (c.x + 1) > (GRID_WIDTH - 1) and anchorNotCaptured(mk_cord(c.x + 1,c.y),capturedAnchors) then
+			false
+		else
+			testForBoxCompletion
+			(
+				mk_move
+				(
+					mk_cord(c.x + 1,c.y),
+					mk_cord(1,1)
+				),play
+			);
+			
+	leftNeighbourTest: cord * set of move * set of cord -> bool
+	leftNeighbourTest(c,play,capturedAnchors) ==
+		if c.x = 1 and anchorNotCaptured(mk_cord(c.x - 1,c.y),capturedAnchors) then
+			false
+		else
+			testForBoxCompletion
+			(
+				mk_move
+				(
+					mk_cord(c.x - 1,c.y),
+					mk_cord(1,1)
+				),play
+			);
+			
+	downNeighbourTest: cord * set of move * set of cord -> bool
+	downNeighbourTest(c,play,capturedAnchors) ==
+		if c.y = 1 and anchorNotCaptured(mk_cord(c.x,c.y - 1),capturedAnchors) then
+			false
+		else
+			testForBoxCompletion
+			(
+				mk_move
+				(
+					mk_cord(c.x,c.y - 1),
+					mk_cord(1,1)
+				),play
+			);
+			
+-- Will test all of a boxes neighbours to see if a box has been created on another anchor point. If a box has been created it
+-- will return the captured anchor so that it may be added to the player who created it. If no double boxes were created then 
+-- it will simply return the inital anchor point to mark that not additional boxes have been created. Neighbouring anchors will
+-- also be tested to ensure they haven't been already captured
+	testForDoubleBoxCompletion: cord * set of move * set of cord -> cord
+	testForDoubleBoxCompletion(c,play,capturedAnchors) ==
+		if(upNeighbourTest(c,play,capturedAnchors)) then
+			mk_cord(c.x,c.y + 1)
+		else if(rightNeighbourTest(c,play,capturedAnchors)) then
+			mk_cord(c.x + 1, c.y)
+		else if(leftNeighbourTest(c,play,capturedAnchors)) then
+			mk_cord(c.x - 1, c.y)
+		else if(downNeighbourTest(c,play,capturedAnchors)) then
+			mk_cord(c.x, c.y - 1)
+		else
+			c;
+		
+-- Tests to see if an anchor has been captured, returns true if anchor is captured
+	anchorNotCaptured: cord * set of cord -> bool
+	anchorNotCaptured(c, capturedAnchors) ==
+		c not in set capturedAnchors;
+					
+-- Helper function that given an anchor will ensure it is not an edge case. If it is it will select the 
+-- closest anchor
+	verifyAnchor: cord -> cord
+	verifyAnchor(c) ==
+		if c.x = GRID_WIDTH and c.y = GRID_HEIGHT then
+			fixCornerCase(c)
+		else if c.x = GRID_WIDTH then
+			fixWidthCase(c)
+		else if c.y = GRID_HEIGHT then
+			fixHeightCase(c)
+		else
+			c;
+		
+			
+-- Helper function that will verify a box has been created on a specific anchor point
+	validBoxTest: cord * set of move -> bool
+	validBoxTest(c,play) ==
+			testNorthVertex(c, play) and
+			testEastVertex(c, play)  and
+			testWestVertex(c, play)  and
+			testSouthVertex(c, play);
+		
+	
+	fixCornerCase: cord -> cord
+	fixCornerCase(c) ==
+		mk_cord(c.x - 1, c.y - 1);
+		
+	fixWidthCase: cord -> cord
+	fixWidthCase(c) ==
+		mk_cord(c.x -1, c.y);
+		
+	fixHeightCase: cord -> cord
+	fixHeightCase(c) ==
+		mk_cord(c.x, c.y - 1);			
+		
+		
+-- Start of Vertex Tester Functions, will test for each face of a square to ensure it has been created		
+	testNorthVertex: cord * set of move -> bool
+	testNorthVertex(c,play) ==
+		mk_move
+			(
+				mk_cord(c.x,c.y + 1),
+				mk_cord(c.x + 1, c.y + 1)
+			)
+		in set play;
+		
+	testWestVertex: cord * set of move -> bool
+	testWestVertex(c,play) ==
+		mk_move
+			(
+				mk_cord(c.x,c.y),
+				mk_cord(c.x,c.y + 1)
+			)
+		in set play;
+		
+	testEastVertex: cord * set of move -> bool
+	testEastVertex(c,play) ==
+		mk_move
+			(
+				mk_cord(c.x + 1, c.y),
+				mk_cord(c.x + 1, c.y + 1)
+			)
+		in set play;
+		
+	testSouthVertex: cord * set of move -> bool
+	testSouthVertex(c,play) ==
+		mk_move
+			(
+				mk_cord(c.x,c.y),
+				mk_cord(c.x + 1, c.y)
+			)
+		in set play;
+-- End of Vertex Testers
+
+	SquaresLeft: set of cord -> nat
+	SquaresLeft(capturedAnchors) ==
+		((GRID_WIDTH - 1) * (GRID_HEIGHT - 1)) - card(capturedAnchors);
+		
+--Function that takes a player and the captured anchors map and returns that players score
+	getPlayerScore: player * map player to cord -> nat
+	getPlayerScore(p,capturedAnchors) ==
+		card(rng({p} <: capturedAnchors));
+		
+					 	
+operations
+
+-- If the player creates a square they capture the anchor for that square increasing their score by one
+	captureAnchor: move * player ==> ()
+	captureAnchor(m,currentPlayer) ==
+		capturedAnchors := capturedAnchors munion {currentPlayer |-> m.c1}
+	pre
+		testForBoxCompletion(m,play); -- A box must have been completed to claim it
+		
+		
+
+-- Given a move this operation will add it to play and test to see if a box was created
+-- If a box was created then the player gains an extra move, if they did not then the turn is passed to the next
+-- player. If the player creates a box it will also test neighbouring boxes to check for a double box creation. In which case
+-- it will add that anchor to the players score too.
+	makeAMove: move ==> ()
+	makeAMove(m) ==
+		(
+			dcl doubleAnchor:cord := testForDoubleBoxCompletion(m.c1,play,rng(capturedAnchors));
+			play := play union {m}; -- Add the play to the set of moves
+			if testForBoxCompletion(m,play) then -- If a box has been made then capture it's anchor
+			(
+				captureAnchor(m,turn);
+				bonusTurn := true
+			);
+			
+			if(not(doubleAnchor = m.c1)) then -- check for double boxes / Created box on a neighbouring anchor
+			( 
+				captureAnchor(mk_move(doubleAnchor,mk_cord(1,1)),turn); -- capture the anchor if a double box has been made
+				bonusTurn := true;
+			);
+			
+			if not bonusTurn then -- if the current play does not have a bonus turn then swap turns
+				if turn = <p1> then
+					turn := <p2>
+				else 
+					turn := <p1>;
+			bonusTurn := false
+		) -- Swap flag so that unless the player gains another bonus turn next turn they will swap
+	pre
+		testValidMove(m.c1,m.c2) and (m not in set play); -- A move must be valid to play it and it cannot already be played 
+	
+end dotsandboxesV2
