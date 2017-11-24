@@ -21,10 +21,10 @@ text{*
 (*==============================================================*)
 section{*VDMvalues*}
 abbreviation
-  GRID_WIDTH \<equiv> (5::VDMNat1)
+ "GRID_WIDTH \<equiv> (5::VDMNat1)"
 
 abbreviation
-  GRID_HEIGHT \<equiv> (5::VDMNat1)
+  "GRID_HEIGHT \<equiv> (5::VDMNat1)"
 
 
 (*==============================================================*)
@@ -37,20 +37,16 @@ record cord =
   ycord :: VDMNat1
 
 definition
-  inv-cord :: cord \<Rightarrow> \<bool>
+  inv_cord :: "cord \<Rightarrow> \<bool>"
 where
-  "inv-cord c \<equiv> (xcord c) \<le> GRID_WIDTH \<and> (ycord c) \<le> GRID_HEIGHT" 
+  "inv_cord c1 \<equiv> (inv_VDMNat1 (xcord c1)) \<and> (inv_VDMNat1 (ycord c1))
+        \<and> (xcord c1) \<le> GRID_WIDTH \<and> (ycord c1) \<le> GRID_HEIGHT" 
 
 
 record move =
   c1 :: cord
   c2 :: cord
-
-definition
-  inv-move :: move \<Rightarrow> \<bool>
-where
- "inv-move m \<equiv> (testValidMove (m c1) (m c2)) \<and> (m (c1 x)) \<le> (m (c2 x)) \<and> (m (c1 y) \<le> (m (c2 y))" 
-
+  
 type_synonym 
   bonusTurn = \<bool>
 
@@ -64,33 +60,46 @@ type_synonym
 section{*VDMfunctions*}
 
 definition
-  testHorizontalMove cord * cord \<Rightarrow> \<bool>
-where
-  "testHorizontalMove c1, c2 \<equiv> (inv-cord c1) \<and> (inv-cord c2) \<and> ((c1 x) - (c2 x) = (1::nat)) \<and>
-    (c1 y) = (c2 y)"
-
+  testHorizontalMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
+  where
+    "testHorizontalMove cord1 cord2 \<equiv> (inv_cord cord1) \<and> (inv_cord cord2) 
+      \<and> abs((xcord cord1) - (xcord cord2)) = (1::VDMNat) \<and> (ycord cord1) = (ycord cord2)"
+    
 definition
-  testVerticalMove cord * cord \<Rightarrow> \<bool>
-where
-  "testVerticalMove c1,c2 \<equiv> (inv-cord c1) \<and> (inv-cord c2) \<and> ((c1 y) - (c2 y) = (1::nat)) \<and>
-    (c1 x) = (c2 x)"
-
+  testVerticalMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
+  where
+    "testVerticalMove cord1 cord2 \<equiv> (inv_cord cord1) \<and> (inv_cord cord2)
+      \<and> abs((ycord cord1) - (ycord cord2)) = (1::VDMNat) \<and> (xcord cord1) = (xcord cord2)"
+    
 definition
-  testValidMove cord * cord \<Rightarrow> \<bool>
-where
-  "testValidMove c1,c2 \<equiv> (inv-cord c1) \<and> (inv-cord c2) \<and> ((testVerticalMove c1 c2) \<or>
-    (testHorizontalMove c1 c2))"
-
+  testValidMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
+  where
+    "testValidMove cord1 cord2 \<equiv> (testVerticalMove cord1 cord2) 
+        \<or> (testHorizontalMove cord1 cord2) \<and> ((inv_cord cord1) \<and> (inv_cord cord2))"
+    
 definition
-  outOfBounds cord \<Rightarrow> \<bool>
-where
-  "outOfBounds c \<equiv> (xcord c) = (GRID_WIDTH \<or> (ycord c) = GRID_HEIGHT) \<and> (inv-cord c)"
-
+  testNormalisedMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
+  where
+    "testNormalisedMove cord1 cord2 \<equiv> (xcord cord1) \<le> (xcord cord2) 
+      \<or> (ycord cord1) \<le> (ycord cord2)" 
+    
 definition
-  squaresLeft cord VDMSet \<Rightarrow> nat
+  inv_move :: "move \<Rightarrow> \<bool>"
 where
- " squaresLeft c \<equiv> ((GRID_WIDTH - 1) * (GRID_HEIGHT - 1)) - (*sizeof*) c"
+  "inv_move m \<equiv> inv_cord (c1 m) \<and> inv_cord (c2 m) \<and> (testValidMove (c1 m) (c2 m)) 
+    \<and> testNormalisedMove (c1 m) (c2 m) "
 
+(* to-do *)  
+definition
+  normaliseMove :: "move \<Rightarrow> move"
+  where
+    "normaliseMove m \<equiv> m"
+    
+definition
+  anchorNotCaputred :: "cord \<Rightarrow> cord VDMSet \<Rightarrow> \<bool>"
+where
+  "anchorNotCaputred cord1 capturedAnchors \<equiv> (cord1 \<notin> capturedAnchors) \<and> (inv_cord cord1)
+    \<and> inv_SetElems inv_cord capturedAnchors "
 
 (*==============================================================*)
 section{*VDMstate*}
