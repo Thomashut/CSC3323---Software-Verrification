@@ -39,6 +39,47 @@ lemma l_inv_SetElems_Cons: "(inv_SetElems f (insert a s)) = (f a \<and> (inv_Set
 unfolding inv_SetElems_def
 by auto
 
+definition
+  inv_VDMSet :: "'a VDMSet \<Rightarrow> \<bool>"
+  where
+   [intro!]:  "inv_VDMSet v \<equiv> finite v"
+
+definition
+  vdm_card :: "'a VDMSet \<Rightarrow> VDMNat"
+  where
+    "vdm_card s \<equiv> (if finite s then int (card s) else undefined)"
+
+definition
+  pre_vdm_card :: "'a VDMSet \<Rightarrow> \<bool>"
+  where
+  [intro!]:  "pre_vdm_card s \<equiv> inv_VDMSet s"
+
+definition
+  post_vdm_card :: "'a VDMSet \<Rightarrow> VDMNat \<Rightarrow> \<bool>"
+  where
+  [intro!]:  "post_vdm_card s RESULT \<equiv> inv_VDMNat RESULT"
+  
+lemma "vdm_card {0,1,(2::int)} = 3"
+  unfolding vdm_card_def by simp 
+
+lemma l_vdm_card_finite[simp]: "finite s \<Longrightarrow> vdm_card s = int (card s)"
+  unfolding vdm_card_def by simp
+
+lemma l_vdm_card_range[simp]: "x \<le> y \<Longrightarrow> vdm_card {x .. y} = y - x + 1"
+  unfolding vdm_card_def by simp 
+
+lemma l_vdm_card_positive: 
+  "finite s \<Longrightarrow> vdm_card s \<ge> 0"
+  by simp
+    
+lemma l_vdm_card_non_negative:
+  "finite s \<Longrightarrow> s \<noteq> {} \<Longrightarrow> vdm_card s > 0"
+  by (simp add: card_gt_0_iff)
+    
+theorem PO_feas_vdm_card:
+  "pre_vdm_card s \<Longrightarrow> post_vdm_card s (vdm_card s)"
+  by (simp add: inv_VDMNat_def inv_VDMSet_def post_vdm_card_def pre_vdm_card_def)
+    
 (*****************************************************************)      
 section {* Sequences *}
 
@@ -236,18 +277,6 @@ apply (simp)
 unfolding applyVDMSeq_def len_def
 by (simp add: nat_diff_distrib')
 
-(*****************************************************************)      
-section {* Maps *}
-  
-(*type_synonym ('a, 'b) "VDMMap" = "'a \<rightharpoonup> 'b" (infixr "\<rightharpoonup>" 0)*)
-  
-definition
-  inv_Map :: "('a \<Rightarrow> \<bool>) \<Rightarrow> ('b \<Rightarrow> \<bool>) \<Rightarrow> ('a \<rightharpoonup> 'b) \<Rightarrow>\<bool>"
-where
-  "inv_Map inv_Dom inv_Rng m \<equiv> 
-      inv_SetElems inv_Dom (dom m) \<and> 
-      inv_SetElems inv_Rng (ran m)"
-
 (*****************************************************************)  
 section {* Some useful examples *}
   
@@ -305,11 +334,122 @@ where
 
 value "inv_MySeq [1, 2, 3]"
 
-  text {* VDM maps auxiliary functions *}
+(*
+type_synonym ('a,'b) "map" = "'a \<Rightarrow> 'b option" (infixr "~=>" 0)
+*)
+text {*
+   In Isabelle, VDM maps can be declared by the @{text "\<rightharpoonup>"} operator (not @{text "\<Rightarrow>"}) 
+   (i.e. type 'right' and you will see the arrow on dropdown menu).
+
+   It represents a function to an optional result as follows:
+
+   VDM     : map X to Y
+   Isabelle: @{text "X \<rightharpoonup> Y"}
+
+   which is the same as 
+
+   Isabelle: @{text "X \<Rightarrow> Y option"}
+   
+   where an optional type is like using nil in VDM (map X to [Y]).
+   That is, Isabele makes the map total by mapping everything outside
+   the domain to None (or nil). In Isabelle
+
+   @{text "datatype 'a option = None | Some 'a"}
+*}
+
+text {* VDM maps auxiliary functions *}
 
 (*
 type_synonym ('a,'b) "map" = "'a \<Rightarrow> 'b option" (infixr "~=>" 0)
 *)
+
+(* dom exists already *)
+thm dom_def
+find_theorems "dom _"
+
+(* map values are given as *)
+value "[ (0::nat) \<mapsto> 7, 1  \<mapsto> 5 ]"
+
+value "[ (0::nat) \<mapsto> (0::nat), 1  \<mapsto> 5 ] 0"
+
+value "the ([ (0::nat) \<mapsto> (0::nat), 1  \<mapsto> 5 ] 4)"
+
+value "the (Some b)"
+value "the None"
+
+value "empty(A \<mapsto> 0)"
+value "empty(A := Some 0)"
+value "[A \<mapsto> 0]"
+value "[A \<mapsto> 0, B \<mapsto> 1]"
+
+find_theorems "the _"
+
+(* not always it's possible to see their values as  
+   maps encodings are more complex. You could use
+   Isabelle prover as a debugger
+ *)
+
+lemma "dom [ A \<mapsto> 0, B \<mapsto> 1] = LOOK_HERE" apply simp oops
+
+(* rng also exists as ran *)
+thm ran_def
+find_theorems "ran _"
+
+lemma "ran [ A \<mapsto> (0::nat), B \<mapsto> 1] = {0,1}" apply simp oops
+
+section {* Maps *}
+  
+(*type_synonym ('a, 'b) "VDMMap" = "'a \<rightharpoonup> 'b" (infixr "\<rightharpoonup>" 0)*)
+  
+definition
+  inv_Map :: "('a \<Rightarrow> \<bool>) \<Rightarrow> ('b \<Rightarrow> \<bool>) \<Rightarrow> ('a \<rightharpoonup> 'b) \<Rightarrow>\<bool>"
+where
+  "inv_Map inv_Dom inv_Rng m \<equiv> 
+      inv_SetElems inv_Dom (dom m) \<and> 
+      inv_SetElems inv_Rng (ran m)"
+
+
+(* 
+ Some VDM functions for map domain/range restriction and filtering. You use some like <: and :>.
+     The use of som of these funcions is one reason that makes the use of maps a bit more demanding,
+     but it works fine. Given these are new definitions, "apply auto" won't finish proofs as Isabelle
+     needs to know more (lemmas) about the new operators.
+*)
+
+definition
+  dom_restr :: "'a set \<Rightarrow> ('a \<rightharpoonup> 'b) \<Rightarrow> ('a \<rightharpoonup> 'b)" (infixr "\<triangleleft>" 110)
+where
+  [intro!]: "s \<triangleleft> m \<equiv> m |` s"
+   (* same as VDM  s <: m *)
+
+thm ran_def
+definition
+  ran_restr :: "('a \<rightharpoonup> 'b) \<Rightarrow> 'b set \<Rightarrow> ('a \<rightharpoonup> 'b)" (infixl "\<triangleright>" 105)
+where
+  [intro!]: "m \<triangleright> s \<equiv> (\<lambda>x . if (\<exists> y. m x = Some y \<and> y \<in> s) then m x else None)"
+   (* same as VDM   m :> s *)
+ 
+definition
+  dom_antirestr :: "'a set \<Rightarrow> ('a \<rightharpoonup> 'b) \<Rightarrow> ('a \<rightharpoonup> 'b)" (infixr "-\<triangleleft>" 110)
+where
+  [intro!]: "s -\<triangleleft> m \<equiv> (\<lambda>x. if x : s then None else m x)"
+   (* same as VDM   s <-: m *)
+
+definition
+  ran_antirestr :: "('a \<rightharpoonup> 'b) \<Rightarrow> 'b set \<Rightarrow> ('a \<rightharpoonup> 'b)" (infixl "\<triangleright>-" 105)
+where
+  [intro!]: "m \<triangleright>- s \<equiv> (\<lambda>x . if (\<exists> y. m x = Some y \<and> y \<in> s) then None else m x)"
+   (* same as VDM   m :-> s *)
+
+definition
+  dagger :: "('a \<rightharpoonup> 'b) \<Rightarrow> ('a \<rightharpoonup> 'b) \<Rightarrow> ('a \<rightharpoonup> 'b)" (infixl "\<dagger>" 100)
+where
+  [intro!]: "f \<dagger> g \<equiv> f ++ g"
+
+definition
+  munion :: "('a \<rightharpoonup> 'b) \<Rightarrow> ('a \<rightharpoonup> 'b) \<Rightarrow> ('a \<rightharpoonup> 'b)" (infixl "\<union>m" 90)
+where
+  [intro!]: "f \<union>m g \<equiv> (if dom f \<inter> dom g = {} then f \<dagger> g else undefined)"
 
 (* dom exists already *)
 thm dom_def
