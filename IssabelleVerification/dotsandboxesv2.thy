@@ -41,7 +41,17 @@ definition
   inv_cord :: "cord \<Rightarrow> \<bool>"
   where
     "inv_cord c1 \<equiv> (inv_VDMNat1 (xcord c1)) \<and> (inv_VDMNat1 (ycord c1))
-          \<and> (xcord c1) \<le> GRID_WIDTH \<and> (ycord c1) \<le> GRID_HEIGHT"
+          \<and> (xcord c1) \<le> GRID_WIDTH \<and> (ycord c1) \<le> GRID_HEIGHT
+          \<and> ((xcord c1) \<ge> (0::VDMNat) \<and> (ycord c1) \<ge> (0::VDMNat))"
+
+definition
+  PO_CordInvarient_ProofObligation :: \<bool>
+  where
+    "\<exists> c . (xcord c) \<le> GRID_WIDTH \<and> (ycord c) \<le> GRID_HEIGHT "
+
+    
+theorem PO_CordInvarient    
+    
 
 (*==============================================================*)
 subsection{*move*}
@@ -49,13 +59,15 @@ subsection{*move*}
 record move =
   c1 :: cord
   c2 :: cord
+  
+(* Invarient further down due to dependancies *)
  
 (*==============================================================*)
-subsection{*state*}
-  
-type_synonym
-  capturedPoints = "cord \<rightharpoonup> player"  
+subsection{*state*}  
 
+type_synonym
+  capturedPoints = "(cord \<rightharpoonup> player)"  
+  
 record state =
    play       :: "move VDMSet"
    turn       :: player
@@ -169,6 +181,15 @@ definition
   where
     "inv_move m \<equiv> inv_cord (c1 m) \<and> inv_cord (c2 m) \<and> (testValidMove (c1 m) (c2 m)) 
       \<and> testNormalisedMove (c1 m) (c2 m) "
+    
+lemma normalisedMove: "(xcord (c1 m)) \<le> (xcord (c2 m)) \<or> (ycord (c1 m)) \<le> (ycord (c2 m))"
+  oops
+(* Discovered that I must stop moves from being negitives *)
+    
+lemma normalisedMove2: "((xcord (c1 m)) \<le> (xcord (c2 m)) \<or> (ycord (c1 m)) \<le> (ycord (c2 m)))
+                           \<and> inv_cord (c1 m) \<and> inv_cord (c2 m)"
+  oops
+
     
 (*==============================================================*)
 subsection{*outofbounds*}
@@ -439,27 +460,57 @@ definition
   where
     "inv_state s \<equiv> (inv_SetElems inv_move (play s)) \<and> (inv_Map inv_cord inv_player (capturedAnchors s))
       \<and> inv_player (turn s)"
+
+(*==============================================================*)
+subsection{*getPlayerScore*}
+  
+definition
+  getPlayerScore :: "player \<Rightarrow> (cord \<rightharpoonup> player) \<Rightarrow> VDMNat"
+  where
+    "getPlayerScore selectedPlayer ca \<equiv> vdm_card (dom (ca ran_restr {p}))"
+    
+    
+definition
+  pre_getPlayerScore :: "player \<Rightarrow> (cord \<rightharpoonup> player) \<Rightarrow> \<bool>"
+  where
+    "pre_getPlayerScore selectedPlayer ca \<equiv> inv_player selectedPlayer \<and> inv_Map inv_cord inv_player ca"
+    
+definition
+  post_getPlayerScore :: "player \<Rightarrow> (cord \<rightharpoonup> player) \<Rightarrow> VDMNat \<Rightarrow> \<bool>"
+  where
+    "post_getPlayerScore selectedPlayer ca RESULT \<equiv> RESULT \<ge> 0 \<and> inv_VDMNat RESULT" 
+
+
+    
+(*==============================================================*)
+subsection{*createMap*}
+  
+definition
+  createMap :: "cord \<Rightarrow> player \<Rightarrow> (cord \<rightharpoonup> player)"
+  where
+    "createMap c passedPlayer \<equiv> [c \<mapsto> passedPlayer]"
     
 (*==============================================================*)
 subsection{*captureAnchor*}
  
 definition
-  captureAnchor :: "move \<Rightarrow> player \<Rightarrow> state \<Rightarrow> state"
+  captureAnchor :: "move \<Rightarrow> state \<Rightarrow> state"
   where
-    "captureAnchor m currentPlayer currentState \<equiv> 
-      \<lparr>play = (play currentState), turn = (turn currentState), bonusTurn = (bonusTurn CurrentState),
-        capturedAnchors = ((capturedAnchors currentState) munion [ (c1 m) \<mapsto> currentPlayer ]) \<rparr>"
+    "captureAnchor m currentState \<equiv> \<lparr>play = (play currentState),
+      turn = (turn currentState),
+      bonusTurn = True,
+      capturedAnchors = ((((capturedAnchors currentState)::capturedPoints) munion (([((c1 m)::cord) \<mapsto> ((turn currentState)::player)])::capturedPoints) )::capturedPoints) \<rparr>"
 
 definition
-  pre_captureAnchor :: "move \<Rightarrow> player \<Rightarrow> state \<Rightarrow> \<bool>"
+  pre_captureAnchor :: "move  \<Rightarrow> state \<Rightarrow> \<bool>"
   where
-    "pre_captureAnchor m currentPlayer currentState \<equiv> inv_move m \<and> inv_player currentPlayer \<and>
-      testForBoxCompletion m (play currentState) "
+    "pre_captureAnchor m  currentState \<equiv> inv_move m \<and> inv_player (turn currentState) \<and>
+      testForBoxCompletion m (play currentState) \<and> (c1 m) \<notin> dom (capturedAnchors currentState) "
     
 definition
-  post_captureAnchor :: "move \<Rightarrow> player \<Rightarrow> state \<Rightarrow> state \<Rightarrow> \<bool>"
+  post_captureAnchor :: "move \<Rightarrow> state \<Rightarrow> state \<Rightarrow> \<bool>"
   where
-    "post_captureAnchor m currentPlayer currentState RESULT \<equiv> True" 
+    "post_captureAnchor m  currentState RESULT \<equiv> inv_state RESULT" 
     
 (*==============================================================*)
 subsection{*saveTheMove*}
@@ -474,44 +525,109 @@ definition
       (testForDoubleBoxCompletion (c1 m) (play currentState) (dom (capturedAnchors currentState))) ) "
     
 definition
-  pre_saveTheMove :: "move \<Rightarrow> state \<Rightarrow> \<bool>"
+  pre_saveTheMove :: "move \<Rightarrow> state \<Rightarrow> \<bool> "
   where
     "pre_saveTheMove m currentState \<equiv> inv_move m \<and> inv_state currentState "
     
 definition
-  post_saveTheMove :: "move \<Rightarrow> \<bool> \<Rightarrow> state \<Rightarrow> \<bool>"
+  post_saveTheMove :: "move \<Rightarrow> cord  \<Rightarrow> state \<Rightarrow> \<bool>"
   where
-    "post_saveTheMove m RESULT RESULT_STATE \<equiv> True"
+    "post_saveTheMove m RESULT RESULT_STATE \<equiv> inv_state RESULT_STATE 
+        \<and> m \<in> (play RESULT_STATE) \<and> inv_cord RESULT"
+
+(*==============================================================*)
+subsection{*swapTurn*}
+  
+  
+definition
+  swapTurn :: "state \<Rightarrow> state"
+  where
+    "swapTurn gameState \<equiv> if \<not>(bonusTurn gameState) then
+      if (turn gameState) = P1 then
+        \<lparr>play = (play gameState),
+         turn = P2,
+         bonusTurn = False,
+         capturedAnchors = (capturedAnchors gameState) \<rparr>
+      else
+        \<lparr>play = (play gameState),
+         turn = P1,
+         bonusTurn = False,
+         capturedAnchors = (capturedAnchors gameState) \<rparr>
+    else
+      \<lparr>play = (play gameState),
+       turn = (turn gameState),
+       bonusTurn = False,
+       capturedAnchors = (capturedAnchors gameState) \<rparr>"
+    
+definition
+  pre_swapTurn :: "state \<Rightarrow> \<bool>"
+  where
+    "pre_swapTurn gameState \<equiv> inv_state gameState"
+
+definition
+  post_swapTurn :: "state \<Rightarrow> state \<Rightarrow> \<bool>"
+  where
+    "post_swapTurn preGameState postGameState \<equiv> (if (bonusTurn preGameState) then 
+      (turn preGameState) = (turn postGameState)
+    else
+      (turn preGameState) \<noteq> (turn postGameState)) \<and> inv_state postGameState \<and> \<not>(bonusTurn postGameState)"
+
+(*==============================================================*)
+subsection{*boxCapture*}
  
+definition
+  boxCapture :: "state \<Rightarrow> move \<Rightarrow> (\<bool> \<times> state)"
+  where
+    "boxCapture currentState m \<equiv> (False,currentState)"
+    
+definition
+  pre_boxCapture :: "state \<Rightarrow> move \<Rightarrow> \<bool>"
+  where
+    "pre_boxCapture currentState m \<equiv> inv_state currentState \<and> inv_move m"
+    
+definition
+  post_boxCapture :: "state \<Rightarrow> move \<Rightarrow> state \<Rightarrow> \<bool>"
+  where
+    "post_boxCapture currentState m resultState \<equiv> inv_state resultState"
+       
 (*==============================================================*)
 subsection{*makeAMove*}
   
 definition
   makeAMove :: "move \<Rightarrow> state \<Rightarrow> state"
   where
-    "makeAMove m gameState \<equiv> gameState"
+    "makeAMove m gameState \<equiv> if testForBoxCompletion m (play gameState) then 
+        (
+          let x = testForDoubleBoxCompletion (c1 m) (play gameState) (captuedAnchors gameState),
+        )
+     else
+        gameState"
     
 definition
   pre_makeAMove :: "move \<Rightarrow> state \<Rightarrow> \<bool>"
   where
-    "pre_makeAMove m currentState \<equiv> inv_move m \<and> m \<notin> (play currentState) "
+    "pre_makeAMove m currentState \<equiv> inv_move m \<and> m \<notin> (play currentState) \<and> testValidMove (c1 m) (c2 m)
+      \<and> inv_state currentState"
     
 definition
   post_makeAMove :: "move \<Rightarrow> state \<Rightarrow> \<bool>"
   where
-    "post_makeAMove m RESULT \<equiv> True"
+    "post_makeAMove m RESULT \<equiv> inv_state RESULT"
  
 (*==============================================================*)
 subsection{*SquaresLeft*}
   
-definition
+definition (* ca = captured Anchors *)
   SquaresLeft :: "cord VDMSet \<Rightarrow> VDMNat"
   where
-    "SquaresLeft capturedAnchors \<equiv> (((GRID_WIDTH -1 ) * (GRID_HEIGHT - 1)) - (vdm_card capturedAnchors))"
+    "SquaresLeft ca \<equiv> if (vdm_card ca = undefined) then
+      0
+      else
+      (GRID_WIDTH - (1::VDMNat)) * (GRID_HEIGHT - (1::VDMNat)) - (vdm_card ca) "
 
 definition
   pre_SquaresLeft :: "cord VDMSet \<Rightarrow> \<bool>"
   where
-    "SquaresLeft capturedAnchors \<equiv> inv_SetElems inv_cord capturedAnchors"
+    "pre_SquaresLeft ca \<equiv> inv_SetElems inv_cord ca"
     
 (*==============================================================*)
