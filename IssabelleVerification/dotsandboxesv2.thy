@@ -43,16 +43,8 @@ definition
     "inv_cord c1 \<equiv> (inv_VDMNat1 (xcord c1)) \<and> (inv_VDMNat1 (ycord c1))
           \<and> (xcord c1) \<le> GRID_WIDTH \<and> (ycord c1) \<le> GRID_HEIGHT
           \<and> ((xcord c1) \<ge> (0::VDMNat) \<and> (ycord c1) \<ge> (0::VDMNat))"
-
-definition
-  PO_CordInvarient_ProofObligation :: \<bool>
-  where
-    "\<exists> c . (xcord c) \<le> GRID_WIDTH \<and> (ycord c) \<le> GRID_HEIGHT "
-
-    
-theorem PO_CordInvarient    
-    
-
+  
+   
 (*==============================================================*)
 subsection{*move*}
   
@@ -161,7 +153,7 @@ definition
   testNormalisedMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
   where
     "testNormalisedMove cord1 cord2 \<equiv> (xcord cord1) \<le> (xcord cord2) 
-      \<or> (ycord cord1) \<le> (ycord cord2)"   
+      \<and> (ycord cord1) \<le> (ycord cord2)"   
 
 definition
   pre_testNormalisedMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
@@ -185,12 +177,7 @@ definition
 lemma normalisedMove: "(xcord (c1 m)) \<le> (xcord (c2 m)) \<or> (ycord (c1 m)) \<le> (ycord (c2 m))"
   oops
 (* Discovered that I must stop moves from being negitives *)
-    
-lemma normalisedMove2: "((xcord (c1 m)) \<le> (xcord (c2 m)) \<or> (ycord (c1 m)) \<le> (ycord (c2 m)))
-                           \<and> inv_cord (c1 m) \<and> inv_cord (c2 m)"
-  oops
-
-    
+        
 (*==============================================================*)
 subsection{*outofbounds*}
 
@@ -424,7 +411,7 @@ definition
       else if rightNeighbourTest  c set_play captured_Anchors then \<lparr>xcord = (xcord c + (1::VDMNat1)), ycord = (ycord c)\<rparr>
       else if leftNeighbourTest c set_play captured_Anchors then \<lparr>xcord = (xcord c - (1::VDMNat1)), ycord = (ycord c)\<rparr>
       else c "
-    
+   
 definition
   pre_testForDoubleBoxCompletion :: "cord \<Rightarrow> move VDMSet \<Rightarrow> cord VDMSet \<Rightarrow> \<bool>"
   where
@@ -464,10 +451,10 @@ definition
 (*==============================================================*)
 subsection{*getPlayerScore*}
   
-definition
+(* definition
   getPlayerScore :: "player \<Rightarrow> (cord \<rightharpoonup> player) \<Rightarrow> VDMNat"
   where
-    "getPlayerScore selectedPlayer ca \<equiv> vdm_card (dom (ca ran_restr {p}))"
+    "getPlayerScore selectedPlayer ca \<equiv> vdm_card dom (ca ran_restr selectedPlayer)"
     
     
 definition
@@ -478,7 +465,7 @@ definition
 definition
   post_getPlayerScore :: "player \<Rightarrow> (cord \<rightharpoonup> player) \<Rightarrow> VDMNat \<Rightarrow> \<bool>"
   where
-    "post_getPlayerScore selectedPlayer ca RESULT \<equiv> RESULT \<ge> 0 \<and> inv_VDMNat RESULT" 
+    "post_getPlayerScore selectedPlayer ca RESULT \<equiv> RESULT \<ge> 0 \<and> inv_VDMNat RESULT" *)
 
 
     
@@ -492,14 +479,14 @@ definition
     
 (*==============================================================*)
 subsection{*captureAnchor*}
- 
+
 definition
   captureAnchor :: "move \<Rightarrow> state \<Rightarrow> state"
   where
     "captureAnchor m currentState \<equiv> \<lparr>play = (play currentState),
       turn = (turn currentState),
       bonusTurn = True,
-      capturedAnchors = ((((capturedAnchors currentState)::capturedPoints) munion (([((c1 m)::cord) \<mapsto> ((turn currentState)::player)])::capturedPoints) )::capturedPoints) \<rparr>"
+      capturedAnchors = ((capturedAnchors currentState) \<union>m [(c1 m) \<mapsto>  (turn currentState )]) \<rparr>"
 
 definition
   pre_captureAnchor :: "move  \<Rightarrow> state \<Rightarrow> \<bool>"
@@ -510,7 +497,32 @@ definition
 definition
   post_captureAnchor :: "move \<Rightarrow> state \<Rightarrow> state \<Rightarrow> \<bool>"
   where
-    "post_captureAnchor m  currentState RESULT \<equiv> inv_state RESULT" 
+    "post_captureAnchor m  currentState RESULT \<equiv> inv_state RESULT"
+    
+(*==============================================================*)
+subsection{*doubleCaptureAnchor*}
+  
+definition
+  doubleCaptureAnchor :: "move \<Rightarrow> move \<Rightarrow> state \<Rightarrow> state"
+  where
+    "doubleCaptureAnchor m1 m2 currentState \<equiv> \<lparr>play = (play currentState),
+      turn = (turn currentState),
+      bonusTurn = True,
+      capturedAnchors = ((capturedAnchors currentState) \<union>m 
+        [(c1 m1) \<mapsto> (turn currentState ),(c1 m2) \<mapsto> (turn currentState)]) \<rparr>"
+
+definition
+  pre_doubleCaptureAnchor :: "move \<Rightarrow> move \<Rightarrow> state \<Rightarrow> \<bool>"
+  where
+    "pre_doubleCaptureAnchor m1 m2  currentState \<equiv> inv_move m1 \<and> inv_player (turn currentState) \<and>
+      testForBoxCompletion m1 (play currentState) \<and> (c1 m1) \<notin> dom (capturedAnchors currentState) \<and>
+      testForBoxCompletion m2 (play currentState) \<and> inv_move m2 \<and> 
+        (c1 m2) \<notin> dom (capturedAnchors currentState) "
+    
+definition
+  post_doubleCaptureAnchor :: "move \<Rightarrow> state \<Rightarrow> state \<Rightarrow> \<bool>"
+  where
+    "post_doubleCaptureAnchor m  currentState RESULT \<equiv> inv_state RESULT"
     
 (*==============================================================*)
 subsection{*saveTheMove*}
@@ -589,19 +601,48 @@ definition
   post_boxCapture :: "state \<Rightarrow> move \<Rightarrow> state \<Rightarrow> \<bool>"
   where
     "post_boxCapture currentState m resultState \<equiv> inv_state resultState"
+    
+(*==============================================================*)
+subsection{*doubleBoxOccured*}
+  
+definition
+  doubleBoxOccured :: "state \<Rightarrow> move \<Rightarrow> \<bool>"
+  where
+    "doubleBoxOccured gameState m \<equiv> 
+      (xcord (testForDoubleBoxCompletion (c1 m) (play gameState) (dom(capturedAnchors gameState)))
+        \<noteq> (xcord (c1 m))) 
+        \<and>
+      (ycord (testForDoubleBoxCompletion (c1 m) (play gameState) (dom(capturedAnchors gameState)))
+        \<noteq> (ycord (c1 m)))" 
        
 (*==============================================================*)
 subsection{*makeAMove*}
+
+(* I'm really sorry about this, it breaks the make a move from the VDM model
+   into a more functional programming style. The first case that can occur is 
+   if the player has two boxes at once. In this case a double capture anchor
+   function will be called. The second instance is if the user creates a box
+   on the current anchor. The third circumstance is if the user has created a box
+   on the neighbouring anchor. Finally we have if the player hasn't created  any boxes
+   at all. All of the capture anchor functions will set bonusTurn flag to true 
+   and add the anchor to the set. This then returns a state which is passed
+   straight away to the swapTurn function. This will check the bonusTurn flag to
+   see if needs to swap the player *)
   
 definition
   makeAMove :: "move \<Rightarrow> state \<Rightarrow> state"
   where
-    "makeAMove m gameState \<equiv> if testForBoxCompletion m (play gameState) then 
-        (
-          let x = testForDoubleBoxCompletion (c1 m) (play gameState) (captuedAnchors gameState),
-        )
-     else
-        gameState"
+    "makeAMove m gameState \<equiv> 
+      if (testForBoxCompletion m (play gameState) \<and> doubleBoxOccured gameState m) then
+        swapTurn (doubleCaptureAnchor m \<lparr> c1 = testForDoubleBoxCompletion (c1 m) (play gameState)
+          (dom (capturedAnchors gameState)), c2 = (c1 m) \<rparr> gameState)
+      else if(testForBoxCompletion m (play gameState)) then
+        swapTurn (captureAnchor m gameState)
+      else if(doubleBoxOccured gameState m) then
+        swapTurn (captureAnchor \<lparr> c1 = testForDoubleBoxCompletion (c1 m) (play gameState) 
+            (dom (capturedAnchors gameState)),c2 = (c1 m) \<rparr> gameState)
+      else
+        swapTurn gameState "
     
 definition
   pre_makeAMove :: "move \<Rightarrow> state \<Rightarrow> \<bool>"
@@ -613,6 +654,9 @@ definition
   post_makeAMove :: "move \<Rightarrow> state \<Rightarrow> \<bool>"
   where
     "post_makeAMove m RESULT \<equiv> inv_state RESULT"
+    
+    
+ 
  
 (*==============================================================*)
 subsection{*SquaresLeft*}
@@ -629,5 +673,10 @@ definition
   pre_SquaresLeft :: "cord VDMSet \<Rightarrow> \<bool>"
   where
     "pre_SquaresLeft ca \<equiv> inv_SetElems inv_cord ca"
+    
+definition
+  post_SquaresLeft :: "cord VDMSet \<Rightarrow> VDMNat \<Rightarrow> \<bool>"
+  where
+    "post_SquaresLeft ca RESULT \<equiv> True"
     
 (*==============================================================*)
