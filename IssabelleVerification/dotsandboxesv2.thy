@@ -13,7 +13,14 @@ text{*
   Description:
     Provide mathematical proof that the dots and boxes vdm model works correctly.
     See dotsandboxesV2.vdmsl for full description of the game as well as the manner
-    of implimentation.
+    of implimentation. There are additional functions compared to the model and that
+    is due to the limitations and differences of Isabelle. I also broke down
+    some of the more complex operations into several smaller operations such as
+    the makeAMove operation which in the first itteration of the model was huge
+    and would have been very difficult to translate to Isabelle. Just about every
+    operation has a satisfiability check just below it in a lemma. Most of the
+    functions do not have these checks as they do not contain post states making
+    it a trivial to prove a lot of them
   Proves: dotsandboxesV2.vdmsl
   *}
 
@@ -43,7 +50,12 @@ definition
     "inv_cord c1 \<equiv> (inv_VDMNat1 (xcord c1)) \<and> (inv_VDMNat1 (ycord c1))
           \<and> (xcord c1) \<le> GRID_WIDTH \<and> (ycord c1) \<le> GRID_HEIGHT
           \<and> ((xcord c1) \<ge> (0::VDMNat) \<and> (ycord c1) \<ge> (0::VDMNat))"
-  
+    
+lemma cordSatisfiability : "\<exists> c . inv_cord c = True"
+  unfolding inv_cord_def inv_VDMNat1_def
+    sledgehammer
+    by (metis less_imp_le order_refl select_convs(1) select_convs(2) zero_less_numeral)
+      
    
 (*==============================================================*)
 subsection{*move*}
@@ -88,6 +100,12 @@ definition
       if cord1 \<notin> captured_Anchors then RESULT = True 
         else if cord1 \<in> captured_Anchors then RESULT = False
           else RESULT = False "
+    
+lemma anchorNotCapturedSatisifability: "\<exists> (c::cord) (ca::cord VDMSet) . 
+  (pre_anchorNotCaptured c ca) \<longrightarrow> post_anchorNotCaptured c ca (anchorNotCaptured c ca)"
+  unfolding post_anchorNotCaptured_def pre_anchorNotCaptured_def anchorNotCaputred_def
+  using cord.select_convs(1) cord_ext_def inv_VDMNat1_def inv_cord_def by fastforce
+    
     
 (*==============================================================*)
 subsection{*testHorizontalMove*}
@@ -172,13 +190,47 @@ definition
   inv_move :: "move \<Rightarrow> \<bool>"
   where
     "inv_move m \<equiv> inv_cord (c1 m) \<and> inv_cord (c2 m) \<and> (testValidMove (c1 m) (c2 m)) 
-      \<and> testNormalisedMove (c1 m) (c2 m) "
+      \<and> testNormalisedMove (c1 m) (c2 m) \<and> ((c1 m) \<noteq> undefined \<and> (c2 m) \<noteq> undefined) "
     
 lemma normalisedMove: "(xcord (c1 m)) \<le> (xcord (c2 m)) \<or> (ycord (c1 m)) \<le> (ycord (c2 m))"
   oops
 (* Discovered that I must stop moves from being negitives *)
-        
+    
+lemma moveSatisfiability: "\<exists> m . inv_move m = True"
+  apply simp_all
+  unfolding inv_SetElems_def inv_cord_def inv_move_def testNormalisedMove_def
+  apply (simp)
+  nitpick
+  oops
+    
 (*==============================================================*)
+subsection{*NormaliseMove*}
+ 
+definition
+  normaliseMove :: "cord \<Rightarrow> cord \<Rightarrow> move"
+  where
+    "normaliseMove cord1 cord2 \<equiv> if testNormalisedMove cord1 cord2 then
+      \<lparr>c1 = cord1, c2 = cord2\<rparr>
+     else
+      \<lparr>c1 = cord2, c2 = cord1\<rparr>"
+    
+definition
+  pre_normaliseMove :: "cord \<Rightarrow> cord \<Rightarrow> \<bool>"
+  where
+    "pre_normaliseMove cord1 cord2 \<equiv> inv_cord cord1 \<and> inv_cord cord2"
+
+definition
+  post_normaliseMove :: "move \<Rightarrow> \<bool>"
+  where
+    "post_normaliseMove m \<equiv> (inv_move m) \<and> (testNormalisedMove (c1 m) (c2 m))"
+    
+lemma allMovesNormalised: "\<forall> (m::move) . inv_move m \<and> inv_cord (c1 m) \<and> inv_cord (c2 m)
+  \<and> inv_VDMNat1 (xcord (c1 m)) \<and> inv_VDMNat1 (ycord (c1 m)) \<and> inv_VDMNat1 (xcord (c2 m)) 
+  \<and> inv_VDMNat (ycord (c2 m))"
+  oops
+  
+    
+(*==============================================================*) 
 subsection{*outofbounds*}
 
 definition
@@ -431,13 +483,16 @@ definition
   where
     "inv_player p \<equiv> (p = P1) \<or> (p = P2)"
     
+lemma allPlayersMustBeP1OrP2: "\<forall> (p::player) . p = P1 \<or> p = P2"
+  using player.exhaust by blast
+    
 (*==============================================================*)
 subsection{*init_state*}
   
 definition
   init_state :: "move VDMSet \<Rightarrow> player \<Rightarrow> \<bool> \<Rightarrow> capturedPoints  \<Rightarrow> state"
   where
-    "init_state p t bt ca \<equiv> \<lparr> play = p, turn = t, bonusTurn = bt, capturedAnchors = ca \<rparr>" 
+    "init_state p t bt ca \<equiv> \<lparr> play = p, turn = t, bonusTurn = bt, capturedAnchors = ca \<rparr>"
     
 (*==============================================================*)
 subsection{*inv_state*}
@@ -447,6 +502,15 @@ definition
   where
     "inv_state s \<equiv> (inv_SetElems inv_move (play s)) \<and> (inv_Map inv_cord inv_player (capturedAnchors s))
       \<and> inv_player (turn s)"
+    
+lemma stateSatisfiability: "\<exists> s . inv_state s"
+  unfolding inv_state_def inv_SetElems_def inv_move_def inv_Map_def inv_cord_def inv_player_def
+  oops
+    
+lemma existsAValidStateThatCanBeCreated: "\<exists> (p::move VDMSet) (t::player) (bt::\<bool>) 
+  (ca::capturedPoints) . inv_state (init_state p t bt ca)"
+  unfolding init_state_def inv_state_def allPlayersMustBeP1OrP2 cordSatisfiability
+    by (smt dom_empty empty_iff inv_Map_def inv_SetElems_def inv_player_def player.exhaust state.select_convs(1) state.select_convs(4))
 
 (*==============================================================*)
 subsection{*getPlayerScore*}
@@ -499,6 +563,17 @@ definition
   where
     "post_captureAnchor m  currentState RESULT \<equiv> inv_state RESULT"
     
+    
+lemma possibleToCaptureAnAnchor: "\<exists> (m::move) (s::state) .
+  pre_captureAnchor m s \<longrightarrow> post_captureAnchor m s (captureAnchor m s)"
+  nitpick
+  oops
+    
+lemma possibleToCaptureAnAnchor: "\<exists> (m::move) (s::state) .
+  pre_captureAnchor m s \<longrightarrow> post_captureAnchor m s (captureAnchor m s)"
+  unfolding existsAValidStateThatCanBeCreated 
+    by (meson inv_move_def move.select_convs(1) pre_captureAnchor_def)
+    
 (*==============================================================*)
 subsection{*doubleCaptureAnchor*}
   
@@ -520,9 +595,16 @@ definition
         (c1 m2) \<notin> dom (capturedAnchors currentState) "
     
 definition
-  post_doubleCaptureAnchor :: "move \<Rightarrow> state \<Rightarrow> state \<Rightarrow> \<bool>"
+  post_doubleCaptureAnchor :: " state \<Rightarrow> \<bool>"
   where
-    "post_doubleCaptureAnchor m  currentState RESULT \<equiv> inv_state RESULT"
+    "post_doubleCaptureAnchor RESULT \<equiv> inv_state RESULT"
+    
+    
+lemma possibleToCaptureTwoAnchors: "\<exists> (m1::move) (m2::move) (s::state) .
+  pre_doubleCaptureAnchor m1 m2 s \<longrightarrow> 
+    post_doubleCaptureAnchor (doubleCaptureAnchor m1 m2 s)"
+  unfolding existsAValidStateThatCanBeCreated
+    by (meson inv_move_def move.select_convs(2) pre_doubleCaptureAnchor_def)
     
 (*==============================================================*)
 subsection{*saveTheMove*}
@@ -546,6 +628,11 @@ definition
   where
     "post_saveTheMove m RESULT RESULT_STATE \<equiv> inv_state RESULT_STATE 
         \<and> m \<in> (play RESULT_STATE) \<and> inv_cord RESULT"
+    
+lemma possibleToSaveAMove: "\<exists> (m::move) (s::state) .
+  pre_saveTheMove m s \<longrightarrow> post_saveTheMove m (snd (saveTheMove m s)) (fst(saveTheMove m s))"
+  unfolding existsAValidStateThatCanBeCreated
+    by (meson inv_move_def move.select_convs(1) pre_saveTheMove_def)
 
 (*==============================================================*)
 subsection{*swapTurn*}
@@ -583,6 +670,11 @@ definition
       (turn preGameState) = (turn postGameState)
     else
       (turn preGameState) \<noteq> (turn postGameState)) \<and> inv_state postGameState \<and> \<not>(bonusTurn postGameState)"
+    
+lemma possibleToSwapTurns: "\<exists> (s::state) .
+  pre_swapTurn s \<longrightarrow> post_swapTurn s (swapTurn s)"
+  unfolding existsAValidStateThatCanBeCreated
+    by (metis UNIV_I inv_SetElems_def inv_move_def inv_state_def move.select_convs(1) pre_swapTurn_def state.select_convs(1))
 
 (*==============================================================*)
 subsection{*boxCapture*}
@@ -602,6 +694,11 @@ definition
   where
     "post_boxCapture currentState m resultState \<equiv> inv_state resultState"
     
+lemma possibleBoxCapture: "\<exists> (s::state) (m::move) .
+  pre_boxCapture s m \<longrightarrow> post_boxCapture s m (snd(boxCapture s m))"
+  unfolding existsAValidStateThatCanBeCreated
+  using post_boxCapture_def pre_boxCapture_def by blast
+    
 (*==============================================================*)
 subsection{*doubleBoxOccured*}
   
@@ -613,7 +710,17 @@ definition
         \<noteq> (xcord (c1 m))) 
         \<and>
       (ycord (testForDoubleBoxCompletion (c1 m) (play gameState) (dom(capturedAnchors gameState)))
-        \<noteq> (ycord (c1 m)))" 
+        \<noteq> (ycord (c1 m)))"
+    
+definition
+  pre_doubleBoxOccured :: "state \<Rightarrow> move \<Rightarrow> \<bool>"
+  where
+    "pre_doubleBoxOccured s m \<equiv> inv_state s \<and> inv_move m"
+    
+definition
+  post_doubleBoxOccured :: "state \<Rightarrow> move \<Rightarrow> \<bool> \<Rightarrow> \<bool>"
+  where
+    "post_doubleBoxOccured s m RESULT \<equiv> True"
        
 (*==============================================================*)
 subsection{*makeAMove*}
@@ -655,9 +762,20 @@ definition
   where
     "post_makeAMove m RESULT \<equiv> inv_state RESULT"
     
+lemma pre_makeAMoveSatisfiability: "\<exists> m s . pre_makeAMove m s"
+  unfolding pre_makeAMove_def
+    oops
     
- 
- 
+lemma makeAMoveSatisfiablity: "\<exists> m s . pre_makeAMove m s \<longrightarrow> (post_makeAMove m (makeAMove m s)) "
+  unfolding pre_makeAMove_def post_makeAMove_def makeAMove_def
+  oops
+   
+theorem makeAMoveSatisfiability1: "\<exists> (m::move) (s::state) .
+  pre_makeAMove m s \<longrightarrow> post_makeAMove m (makeAMove m s)"
+  unfolding existsAValidStateThatCanBeCreated possibleBoxCapture
+    possibleToSwapTurns possibleToSaveAMove
+    using post_makeAMove_def pre_makeAMove_def by blast
+    
 (*==============================================================*)
 subsection{*SquaresLeft*}
   
